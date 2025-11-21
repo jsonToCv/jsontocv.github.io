@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=0.8" />
+<title>JSON Resume Renderer 2025 V8</title>
+<script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.min.js"></script>
+<style>
+:root{--accent:#1f6feb;--muted:#6b7280;background:#fff;font-family:Arial,Helvetica,sans-serif}
+body{margin:0;color:#111}
+.wrap{max-width:920px;margin:12px auto;padding:18px 18px 2px 18px;}
+.controls{display:flex;gap:10px;margin-bottom:18px;align-items:center}
+.file-label{padding:8px 12px;background:#f1f5f9;border-radius:6px;cursor:pointer;text-align:center}
+#jsonFile{display:none}
+.btn{padding:8px 12px;border-radius:6px;border:0;cursor:pointer}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.secondary{background:#fff;border:1px solid var(--accent);color:var(--accent)}
+
+/* header */
+.header-block{padding:0px 6px 6px 6px;display:grid;grid-template-columns:120px 1fr 160px;gap:20px;align-items:center}
+.photo{width:120px;height:120px;border-radius:12px;overflow:hidden;background:#eee;display:flex;align-items:center;justify-content:center}
+.photo img{width:100%;height:100%;object-fit:cover}
+.title-block{}
+.name{font-size:34px;font-weight:700;margin:0}
+.location{color:var(--muted);margin-top:6px;font-size:14px}
+.role{font-size:16px;margin-top:10px;color:#222}
+.years{font-size:16px;color:#222;margin-top:6px}
+.right-contacts{font-size:14px;color:var(--muted);text-align:right;}
+.right-contacts a{color:var(--muted);text-decoration:none;display:block;margin-bottom:6px;}
+
+/* summary */
+.summary-box{margin-top:1px;background:#f3f1f1;padding:10px 24px;border-radius:10px;border:2px solid rgba(0,0,0,0.06);font-size:15px;text-align:center;}
+
+/* skills */
+.skills-row{display:flex;gap:18px;align-items:flex-start;margin-top:8px}
+.skill-label{display:inline-block;font-size:34px;color:#9a9a9a;margin-right:6px;padding-right:6px;align-self:top;text-align: center;}
+.skill-list{flex:1;display:flex;justify-content:center;flex-wrap:wrap;}
+.skill-tag{display:inline-block;align-items:center;gap:10px;padding:4px 10px 6px 14px;margin:4px 6px 2px 0;border-radius:28px;border:2px solid rgba(0,0,0,0.30);background:#fff;vertical-align:middle}
+.skill-name{font-weight:700;font-size:15px;margin-right:8px}
+.skill-meta{font-size:13px;color:var(--muted);margin-right:0px}
+.level-bar{display:none;width:160px;height:8px;border-radius:6px;background:#dfe9f5;position:relative;overflow:hidden}
+.level-bar-inner{height:100%;width:0%;background:var(--accent);position:absolute;left:0;top:0}
+.level-dashes{display:flex;gap:6px;margin-top:2px}
+.dash{width:28px;height:4px;background:#dfe9f5;border-radius:2px}
+.dash.filled{background:var(--accent)}
+
+.section-title{font-size:18px;font-weight:700;margin-top:24px;margin-bottom:6px}
+.education-title{font-size:18px;font-weight:700;margin-top:4px;margin-bottom:6px}
+.work-item{margin-bottom:18px;position:relative; padding-left:28px;left:-6px}
+.work-item::before{content:""; position:absolute; left:8px; top:6px; width:8px; height:8px; background:#c4c4c4; border-radius:50%;}
+.work-item::after{content:""; position:absolute; left:11px; top:18px; width:2px; height:calc(100% - 18px); border-left:2px dashed #d4d4d4;}
+.work-header{display:flex;justify-content:space-between;align-items:flex-start}
+.company{font-weight:700}
+.summary{margin-top:4px;}
+.edu-details{display:flex;}
+.edu-institute{min-width:220px;}
+.position{color:var(--muted);font-size:14px}
+.period{font-size:13px;color:var(--muted);white-space:nowrap;}
+.highlights{margin-top:8px;color:#111}
+.highlights li{margin-bottom:6px;font-size:14px}
+.highlights > LI:last-child {
+  /*border:solid 1px #CCC;*/
+  border: solid 1px #CEDAFF;
+  border-radius: 10px;
+  padding: 2px 4px;
+  width: 100%;
+  max-width: max-content;
+  list-style-type: none;
+  position: relative;
+  left: -20px;
+  /*background-color: #F9DAFF29;
+  box-shadow: 3px 2px #D60BFD2E;*/
+  background-color: #FBFCFF8C;
+  box-shadow: 3px 2px #D60BFD08;
+}
+
+.eduList{margin-bottom:0px;}
+
+@media print{.controls{display:none} .summary-box{page-break-inside:avoid}}
+@media (max-width: 621px) {
+ .header-block {display:block;text-align:center}
+ .photo, .title-block, .right-contacts {display:inline-block;}
+ .right-contacts > a {display:inline;}
+ .edu-details {margin-bottom:6px;}
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="controls">
+    <label class="file-label" for="jsonFile">Choose resume JSON</label>
+    <input id="jsonFile" type="file" accept=".json,application/json">
+    <button id="loadBtn" class="btn primary">Load JSON</button>
+    <button id="printBtn" class="btn secondary">Print / Save as PDF</button>
+    <div style="margin-left:auto;font-size:13px;color:var(--muted)">Handlebars json CV template</div>
+  </div>
+
+  <div id="cv" style="display:none">
+    <div class="header-block">
+      <div class="photo"><img id="photoImg" src="" alt="Photo"></div>
+      <div class="title-block">
+        <h1 class="name" id="name"></h1>
+         <div> 
+			<span class="location" id="location"></span>    &nbsp;    <span class="years" id="years"><span>
+		</div>
+        <div class="role" id="role"></div>        
+		<div class="directContacts" id="directContacts"></div>
+      </div>
+      <div class="right-contacts" id="rightContacts"></div>
+    </div>
+
+    <div class="summary-box" id="summaryBox" style="display:none"></div>
+
+    <div class="skills-row">
+      <div class="skill-list" id="skillsList">
+	  </div>
+    </div>
+
+    <div class="section-title">Recent experience</div>
+    <div id="workList"></div>
+
+    <div class="education-title">Education</div>
+    <div id="eduList"></div>
+  </div>
+</div><script id="work-template" type="text/x-handlebars-template">
+  {{#each work}}
+    {{#unless hide }}		
+		<div class="work-item">
+		  <div class="work-header">
+			<div>
+			  <div class="company">{{company}}</div>
+			  <div class="position">{{position}}{{#if location}} · <span class="position-location">{{location}}</span>{{/if}}</div>
+			</div>
+			<div class="period">{{#if startDate}}{{formatDate startDate}} - {{/if}}{{#if endDate}}{{formatDate endDate}}{{else}}Present{{/if}}</div>
+		  </div>
+		  {{#if summary}}
+			  <div class="summary">{{summary}}</div>
+		  {{/if}}
+		  {{#if highlights}}
+		  <ul class="highlights">
+			{{#each highlights}}<li>{{this}}</li>{{/each}}
+		  </ul>
+		  {{/if}}
+		</div>
+	{{/unless}}
+  {{/each}}
+</script><script id="edu-template" type="text/x-handlebars-template">
+  {{#each education}}
+    <div class="edu-item">
+      <div style="display:flex;justify-content:space-between">
+        <div class="edu-details">
+			<span class="edu-institute" style="font-weight:700">{{institution}}</span> <span class="position">{{studyType}} · {{area}}</span>
+		</div>
+        <div class="period">{{formatDate startDate}} - {{formatDate endDate}}</div>
+      </div>
+    </div>
+  {{/each}}
+</script><script>
+(function(){
+  function $(s){return document.querySelector(s);}
+
+ var data = {
+  "basics": {
+    "name": "Miklos Aszriev",
+    "label": "Frontend JavaScript Developer",
+    "image": "https://avatars.githubusercontent.com/u/33158920?s=400&u=c72375aee242487b87524957aab98f5f26d2ed21&v=4",
+    "email": "aszrievmiklos@gmail.com",
+    "phone": "+36 70 59 11 599",
+    "url": "https://findrepo.github.io/?query=user%3Afotoamg",
+    "summary": "JavaScript/TypeScript Frontend Developer with prior backend experience. I have worked on enterprise-level projects in international teams at outsourcing companies.",
+    "profiles": [
+      {
+        "network": "gitconnected",
+        "username": "fotoamg",
+        "url": "https://gitconnected.com/fotoamg"
+      },
+      {
+        "network": "GitHub",
+        "username": "fotoamg",
+        "url": "https://github.com/fotoamg"
+      },
+      {
+        "network": "LinkedIn",
+        "username": "aszriev",
+        "url": "https://www.linkedin.com/in/aszriev/"
+      }
+    ],
+    "headline": "",
+    "blog": null,
+    "yearsOfExperience": 21,
+    "username": "fotoamg",
+    "locationAsString": "Szeged, Hungary",
+    "region": "Szeged, Hungary",
+    "karma": 22,
+    "id": "d6e74d29-704e-4371-83d5-3809852ce402",
+    "followers": 0,
+    "following": 0,
+    "picture": "https://avatars.githubusercontent.com/u/33158920?v=4",
+    "website": "https://findrepo.github.io/?query=user%3Afotoamg",
+	"portfolio": "https://findrepo.github.io/?query=user%3Afotoamg",
+	"cv": "https://gitconnected.com/fotoamg"
+  },
+  "work": [
+    {
+      "name": "Mortoff - Viterra Vegetable oil producer and GoodMills",
+      "hide": false,
+      "location": "Budapest-remote from Szeged",
+      "description": "",
+      "position": "Angular frontend developer",
+      "url": "https://mortoff.hu",
+      "startDate": "2022-04-01",
+      "endDate": "2023-06-01",
+      "summary": "Automation of logistics and industrial workflows",
+      "highlights": [
+        "Implementing and integrating new frontend features for Production Planning 2.0",
+        "Supporting the existing application, designing responsive interfaces (CSS), managing CRs",
+        "Maintaining code quality and >90% test coverage, Cypress automation (unit + E2E)",
+        "Stack: Angular / Typescript / E2E / Unit test / SCSS / Cypress"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2022,\"month\":4}",
+      "end": "{\"year\":2023,\"month\":6}",
+      "company": "Mortoff - Viterra Vegetable oil producer and GoodMills",
+      "website": "https://mortoff.hu"
+    },
+    {
+      "name": "Mortoff - DXC Technology",
+      "hide": false,
+      "location": "Budapest-remote from Szeged",
+      "description": "",
+      "position": "Angular frontend developer",
+      "url": "https://mortoff.hu",
+      "startDate": "2021-10-01",
+      "endDate": "2022-04-01",
+      "summary": "Configuring Vodafone DE product catalogue and developing webshop components",
+      "highlights": [
+        "Developing purchase-flow steps across multiple SPAs (Cart/Basket flows)",
+        "Configuring product catalogue from JSON data",
+        "Agile environment in a Scrum team with cross-team collaboration",
+        "Stack: Angular.js / React / Vue3 / TypeScript / Nuxt / JSON / jQuery / SCSS"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2021,\"month\":10}",
+      "end": "{\"year\":2022,\"month\":4}",
+      "company": "Mortoff - DXC Technology",
+      "website": "https://mortoff.hu"
+    },
+    {
+      "name": "Mortoff - Corrux Gmbh",
+      "hide": false,
+      "location": "Budapest-remote from Szeged",
+      "description": "",
+      "position": "Senior frontend developer",
+      "url": "https://mortoff.hu",
+      "startDate": "2021-03-01",
+      "endDate": "2021-09-01",
+      "summary": "Integrating industrial asset/device management applications into Corrux One",
+      "highlights": [
+        "Merging various applications into a unified construction operating platform",
+        "Consolidating equipment and process data streams into a single React-based solution",
+        "Stack: React / Syncfusion / Typescript / Jest / SCSS"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2021,\"month\":3}",
+      "end": "{\"year\":2021,\"month\":9}",
+      "company": "Mortoff - Corrux Gmbh",
+      "website": "https://mortoff.hu"
+    },
+    {
+      "name": "dicomLAB",
+      "hide": false,
+      "location": "Szeged-remote",
+      "description": "",
+      "position": "Software engineer",
+      "url": "https://www.dicomlab.com/",
+      "startDate": "2020-01-01",
+      "endDate": "2020-06-01",
+      "summary": "Development of dental implant designer and B2B e-commerce applications",
+      "highlights": [
+        "3D interactive browser UI based on patient CT scan data",
+        "Redux state management for 3D model data with history tracking",
+        "Stack: React / Redux / Typescript / NodeJS / Firebase / SCSS / Three.js / Canvas /OpenGL"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2020,\"month\":1}",
+      "end": "{\"year\":2020,\"month\":6}",
+      "company": "dicomLAB",
+      "website": "https://www.dicomlab.com/"
+    },
+    {
+      "name": "Evosoft Hungary ",
+      "hide": false,
+      "location": "Szeged",
+      "description": "",
+      "position": "Frontend developer",
+      "url": "https://www.evosoft.hu/",
+      "startDate": "2019-01-01",
+      "endDate": "2020-01-01",
+      "summary": "Cloud-based IoT applications in the MindSphere ecosystem",
+      "highlights": [
+        "Developing new features and flexible maintenance-interval components in Angular",
+        "Maintaining code quality with Cypress automation (unit + E2E)",
+        "Stack: Angular8+ / i18n / RXjs / Jest / Typescript / E2E / Unit tests / SCSS"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2019,\"month\":1}",
+      "end": "{\"year\":2020,\"month\":1}",
+      "company": "Evosoft Hungary ",
+      "website": "https://www.evosoft.hu/"
+    },
+    {
+      "name": "EPAM Systems",
+      "hide": false,
+      "location": "Szeged",
+      "description": "",
+      "position": "Software engineer",
+      "url": "https://careers.epam.hu/company",
+      "startDate": "2013-03-01",
+      "endDate": "2018-12-01",
+      "summary": "CMS development with Adobe Experience Manager. Several projects for major international clients for example: hotels.com, HILTI, Ryanair, MoneySuperMarket, The Coca Cola Company,  ASCOM etc. ",
+      "highlights": [
+        "Started as Java backend developer and became Certified AEM expert (AEM/CQ)",
+        "Transitioned to Frontend JavaScript development (Angular.js, React/Redux, NodeJS)",
+        "Stack: Java / Angular.js / React / Redux / AEM / Typescript / SCSS / BEM / Vagrant / Docker"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2013,\"month\":3}",
+      "end": "{\"year\":2018,\"month\":12}",
+      "company": "EPAM Systems",
+      "website": "https://careers.epam.hu/company"
+    },
+    {
+      "name": "Neuron Software Ltd.",
+      "hide": false,
+      "location": "Debrecen",
+      "description": "",
+      "position": "Software developer",
+      "url": "https://worldofneuron.com/",
+      "startDate": "2012-02-01",
+      "endDate": "2013-03-01",
+      "summary": "Replacing legacy GWT application with a Liferay CMS Portal and portlets",
+      "highlights": [
+        "Implemented ~70% of new portlets, rewriting UI and workflows",
+        "Stack: Oracle PL/SQL, Eclipse IDE, SVN, Git, Savane, SOAP UI, Maven, Liferay Portal 6.0, GWT 2.04, EJB, Struts, Tiles, JS, jQuery, CSS, HTML, JSP, JSF, Primefaces 3.X, Weblogic, Jetty"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2012,\"month\":2}",
+      "end": "{\"year\":2013,\"month\":3}",
+      "company": "Neuron Software Ltd.",
+      "website": "https://worldofneuron.com/"
+    },
+    {
+      "name": "Nebu Bv.",
+      "hide": false,
+      "location": "Debrecen",
+      "description": "",
+      "position": "Software developer",
+      "url": "https://www.nebu.com/",
+      "startDate": "2006-03-01",
+      "endDate": "2011-05-01",
+      "summary": "Development of a leading market research application for multi-mode data collection",
+      "highlights": [
+        "Client visits in NL and UK as first contact for Planner/Dialer issues",
+        "Led Application Synergy Team, creating shared and reusable components",
+        "Held trainings and demos on design patterns and architecture",
+        "Stack: MS SQL Server/Profiler, Eclipse IDE, Tomcat, CVS, SVN, Ant, TargetProcess, JavaSE/EE, Struts 1.6, DisplayTag, JSON, JavaScript, JQuery, HTML, CSS"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2006,\"month\":3}",
+      "end": "{\"year\":2011,\"month\":5}",
+      "company": "Nebu Bv.",
+      "website": "https://www.nebu.com/"
+    },
+    {
+      "name": "National Instruments",
+      "hide": true,
+      "location": "Debrecen",
+      "description": "",
+      "position": "Software Engineer Intern",
+      "url": "http://www.ni.com",
+      "startDate": "2005-09-01",
+      "endDate": "2006-02-01",
+      "summary": "High-precision electronic controller/measurement unit test software",
+      "highlights": [
+        "Supervised test processes and supported debugging for the manufacturing test engineering team",
+        "Stack: Oracle, Test Stand, Agile, Lotus Notes, LabView, PL SQL"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2005,\"month\":9}",
+      "end": "{\"year\":2006,\"month\":2}",
+      "company": "National Instruments",
+      "website": "http://www.ni.com"
+    },
+    {
+      "name": "PAX 96 Kft.",
+      "hide": true,
+      "location": "Kecskemet-Szeged remote",
+      "description": "",
+      "position": "Freelancer",
+      "url": "https://jofold.hu",
+      "startDate": "2002-11-01",
+      "endDate": "2003-10-01",
+      "summary": "Developing a full industrial application covering all factory workflows",
+      "highlights": [
+        "Single application managing stock, sales, raw materials, orders, manufacturing data, recipes and printing",
+        "Delivered entire implementation alone, with weekly on-site customer meetings",
+        "Stack: a Java/Swing/JDBC application using MSSQL DB, JBuilder"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2002,\"month\":11}",
+      "end": "{\"year\":2003,\"month\":10}",
+      "company": "PAX 96 Kft.",
+      "website": "https://jofold.hu"
+    },
+    {
+      "name": "3i Kft. - Richter Gedeon Ltd.",
+      "hide": true,
+      "location": "Szeged",
+      "description": "",
+      "position": "Developer co-worker",
+      "url": "https://3i.hu",
+      "startDate": "2002-09-01",
+      "endDate": "2002-06-01",
+      "summary": "ISO-compliant process control and event-logging software for Richter Gedeon",
+      "highlights": [
+        "Developing technological software using CimpliCity HMI and VB scripts",
+        "PLC programming, ISO-standard process control and event logging to MS SQL",
+        "Stack: MS SQL DB, CimpliCity HMI, MS SQL Management Studio, VisualBasic Scripts, MS SQL, PLC programming, MODBUS/CAN interface communication"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":2002,\"month\":9}",
+      "end": "{\"year\":2002,\"month\":6}",
+      "company": "3i Kft. - Richter Gedeon Ltd.",
+      "website": "https://3i.hu"
+    },
+    {
+      "name": "University of Szeged - JGYTFK",
+      "hide": true,
+      "location": "Szeged",
+      "description": "",
+      "position": "as student doing researches and IT administration, system supervisor tasks",
+      "url": "https://u-szeged.hu",
+      "startDate": "1998-09-01",
+      "endDate": "2001-06-01",
+      "summary": "IT administration, system supervision and academic research",
+      "highlights": [
+        "Linux system administration and UNIX/Win9x/DOS supervision",
+        "Developed SOCKET-based client-server TCP/IP applications in C for dissertation",
+        "C++ text-based and 3D game development with CrystalSpace engine",
+        "Stack: Midnight Commander, Telnet, gcc, screen, XTerminal, Putty, RedHat/Mandrake/Suse Linux, Borland C, MS Visual Studio, LPC C++, Visual C"
+      ],
+      "isCurrentRole": false,
+      "start": "{\"year\":1998,\"month\":9}",
+      "end": "{\"year\":2001,\"month\":6}",
+      "company": "University of Szeged - JGYTFK",
+      "website": "https://u-szeged.hu"
+    }
+  ],
+  "volunteer": [],
+  "education": [
+	{
+      "institution": "Technical School of Szeged",
+      "area": "Electrical Power Technician",
+      "url": "https://www.moravarosi.hu/",
+      "studyType": "Technical Diploma",
+      "startDate": "2025-09-01",
+      "endDate": "2026-06-01",
+      "score": "",
+      "courses": [],
+      "description": "",
+      "activities": "",
+      "start": "{\"year\":2025,\"month\":9}",
+      "end": "{\"year\":2026,\"month\":6}",
+      "website": "",
+      "gpa": ""
+    },
+    {
+      "institution": "Technical School of Szeged",
+      "area": "Electrician – Building Electrical Systems",
+      "url": "https://www.moravarosi.hu/",
+      "studyType": "Technical Diploma",
+      "startDate": "2023-09-01",
+      "endDate": "2025-06-01",
+      "score": "",
+      "courses": [],
+      "description": "",
+      "activities": "",
+      "start": "{\"year\":2022,\"month\":9}",
+      "end": "{\"year\":2024,\"month\":6}",
+      "website": "",
+      "gpa": ""
+    },
+    {
+      "institution": "University of Debrecen",
+      "url": "",
+      "area": "Informatics teacher (Ma./Msc.)",
+      "studyType": "Master",
+      "startDate": "2002-09-01",
+      "endDate": "2007-06-01",
+      "score": "",
+      "courses": [],
+      "description": "",
+      "activities": "",
+      "start": "{\"year\":2002,\"month\":9}",
+      "end": "{\"year\":2007,\"month\":6}",
+      "website": "",
+      "gpa": ""
+    },
+    {
+      "institution": "University of Szeged",
+      "url": "",
+      "area": "Computer sciences and technics teacher (Ba./Bsc.)",
+      "studyType": "Bachelor",
+      "startDate": "1997-09-01",
+      "endDate": "2001-06-01",
+      "score": "",
+      "courses": [],
+      "description": "",
+      "activities": "",
+      "start": "{\"year\":1997,\"month\":9}",
+      "end": "{\"year\":2001,\"month\":6}",
+      "website": "",
+      "gpa": ""
+    }
+  ],
+  "awards": [],
+  "certificates": [
+    {
+      "name": "Certified Adobe Experience Manager expert/dev (AEM/CQ)",
+      "date": "2018-01-01",
+      "url": "",
+      "issuer": "Adobe",
+      "summary": "",
+      "fullDate": "{\"year\":2018,\"month\":1,\"day\":1}",
+      "website": ""
+    }
+  ],
+  "publications": [],
+  "skills": [
+    {
+      "name": "Frontend",
+      "level": "Expert",
+      "keywords": [
+        "HTML / JSX / JSP",
+        "SCSS / CSS / BEM / Styled Components",
+        "Javascript / Typescript",
+        "React / Next",
+        "Vue3",
+        "Angular",
+        "Redux"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 9
+    },
+    {
+      "name": "Backend",
+      "level": "Expert",
+      "keywords": [
+        "Java",
+        "Node",
+        "MongoDB",
+        "JackRabbit",
+        "MSSQL"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 13
+    },
+    {
+      "name": "JavaScript",
+      "level": "Expert",
+      "keywords": [
+        "Javascript"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 12
+    },
+	{
+      "name": "TypeScript",
+      "level": "Advanced",
+      "keywords": [
+        "Typescript"
+      ],
+      "rating": 4,
+      "yearsOfExperience": 6
+    },
+    {
+      "name": "React",
+      "level": "Expert",
+      "keywords": [
+        "React / Next"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 5
+    },
+    {
+      "name": "Redux",
+      "level": "Advanced",
+      "keywords": [
+        "Redux"
+      ],
+      "rating": 4,
+      "yearsOfExperience": 4
+    },
+    {
+      "name": "CSS",
+      "level": "Expert",
+      "keywords": [
+        "SCSS / CSS / BEM / Styled Components"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 10
+    },
+    {
+      "name": "Angular",
+      "level": "Expert",
+      "keywords": [
+        "Angular",
+        "angular.js"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 5
+    },
+    {
+      "name": "Vue",
+      "level": "Beginner",
+      "keywords": [
+        "Vue3",
+        "Vue2"
+      ],
+      "rating": 2,
+      "yearsOfExperience": 2
+    },
+    {
+      "name": "Java",
+      "level": "Expert",
+      "keywords": [
+        "Java"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 13
+    },
+    {
+      "name": "HTML",
+      "level": "Expert",
+      "keywords": [
+        "HTML / JSX / JSP"
+      ],
+      "rating": 5,
+      "yearsOfExperience": 17
+    },
+    {
+      "name": "SQL",
+      "level": "Advanced",
+      "keywords": [
+        "MSSQL",
+        "PLSQL"
+      ],
+      "rating": 4,
+      "yearsOfExperience": 7
+    }
+  ],
+  "languages": [
+    {
+      "language": "Hungarian",
+      "fluency": "Native"
+    },
+    {
+      "language": "English",
+      "fluency": "Fluent"
+    },
+    {
+      "language": "German",
+      "fluency": "Basic reading comprehension"
+    }
+  ],
+  "interests": [],
+  "references": [],
+  "projects": [],
+  "meta": {
+    "canonical": "https://raw.githubusercontent.com/jsonresume/resume-schema/master/resume.json",
+    "version": "v1.0.0",
+    "lastModified": "2025-11-16T19:22:44+01:00Z",
+    "note": "This is a combined version of the old and new JSON Resume API to provide maximum compatibility. You will notice duplicated values in different fields."
+  }
+};
+
+
+  // safer date helper
+  Handlebars.registerHelper('formatDate', function(ds){
+    if(!ds) return '';
+    // if(typeof ds === 'string' && ds.length >= 7) return ds.slice(0,7);
+	if(typeof ds === 'string' && ds.length >= 4) return ds.slice(0,4);
+    var d = new Date(ds);
+    if(!isNaN(d)) return d.getFullYear().toString();
+    return ds;
+  });
+
+  var jsonInput = $('#jsonFile'), loadBtn = $('#loadBtn'), printBtn = $('#printBtn'), cv = $('#cv');
+
+  document.querySelector('.file-label').addEventListener('click', function(){ jsonInput.click(); });
+  loadBtn.addEventListener('click', function(){
+    if(!jsonInput.files || !jsonInput.files[0]){ alert('Choose a JSON file having JSON resume based format!'); return; }
+    var f = jsonInput.files[0];
+    var r = new FileReader();
+    r.onload = function(e){
+      try{
+        data = JSON.parse(e.target.result);
+        renderFromJSON(data);
+      }catch(err){
+        alert('Error in JSON parsing: ' + err.message);
+        console.error(err);
+      }
+    };
+    r.readAsText(f,'utf-8');
+  });
+
+  printBtn.addEventListener('click', function(){ window.print(); });
+
+  function renderFromJSON(data){
+    cv.style.display = 'block';
+    var basics = data.basics || {};
+
+    // photo
+    var photo = basics.picture || basics.image || '';
+    var photoImg = document.getElementById('photoImg');
+    if(photo){ photoImg.src = photo; photoImg.style.display='block'; } else { photoImg.style.display='none'; }
+
+    // header fields
+    $('#name').textContent = basics.name || '';
+    $('#location').textContent = basics.locationAsString || basics.region || '';
+    $('#role').textContent = basics.label || basics.headline || '';
+    $('#years').textContent = basics.yearsOfExperience ? (basics.yearsOfExperience-1 + ' years of experience') : '';
+
+var extraContent = '';
+    // right contacts
+    var right = $('#rightContacts'); right.innerHTML = '';
+    if(Array.isArray(basics.profiles)){
+      basics.profiles.forEach(function(p){
+        var a = document.createElement('a');
+		// a.style.whiteSpace ='nowrap';
+		extraContent = '';
+        a.href = p.url || '#'; a.target = '_blank';
+        if (p.network==='GitHub') {
+		  extraContent = '<span>' + (p.username || p.network || p.url) + '</span><svg style="margin-left:4px;height:16px;position:relative;top:4px;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-github mr-2 h-4 w-4"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path><path d="M9 18c-4.51 2-5-2-7-2"></path></svg>';
+		  a.innerHTML = extraContent;
+        } else if (p.network==='LinkedIn') {
+		  extraContent = '<span>' + (p.username || p.network || p.url) + '</span> <svg style="margin-left:4px;height:16px;position:relative;top:4px;"" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-linkedin mr-2 h-4 w-4"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect width="4" height="12" x="2" y="9"></rect><circle cx="4" cy="4" r="2"></circle></svg>';
+		  a.innerHTML = extraContent;
+		} else if (p.network==='gitconnected' || p.network==='website') {
+		  extraContent = '<span>' + (p.username || p.network || p.url) + '</span><svg style="margin-left:4px;height:16px;position:relative;top:4px;" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe mr-2 h-4 w-4"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>';
+		  a.innerHTML = extraContent;
+		} else {
+			a.textContent = p.username || p.network || p.url;
+		}
+		// a.textContent = (p.username || p.network || p.url) + extraContent;
+		
+        right.appendChild(a);
+      });
+    }
+
+    // summary box
+    var summaryBox = $('#summaryBox');
+    if(basics.summary){ summaryBox.style.display='block'; summaryBox.textContent = basics.summary; }
+    else summaryBox.style.display='none';
+
+    // contact pieces under name
+    var titleBlock = document.querySelector('.title-block');
+    // remove previous inline-contact nodes
+    var old = titleBlock.querySelectorAll('.inline-contact'); old.forEach(function(n){ n.parentNode.removeChild(n); });
+
+    var contactPieces = [];
+    if(basics.website) contactPieces.push(basics.website);
+
+   var directContacts = document.querySelector('.directContacts');
+   directContacts.innerHTML='';
+   
+	if(basics.phone)  {
+	 var phoneSpan = document.createElement('span');
+		phoneSpan.style.marginTop='4px'; phoneSpan.style.fontSize='14px'; phoneSpan.style.color='var(--muted)';
+		phoneSpan.style.paddingRight='14px'; 
+		phoneSpan.textContent = basics.phone;
+		directContacts.appendChild(phoneSpan);
+	}
+	if(basics.email && basics.email.indexOf('@') !== -1)  {
+	 var emailSpan = document.createElement('span');
+	  var a = document.createElement('a'); a.href = 'mailto:' + basics.email; a.textContent = basics.email; a.style.color='inherit'; emailSpan.appendChild(a);
+		emailSpan.style.marginTop='4px'; emailSpan.style.fontSize='14px'; emailSpan.style.color='var(--muted)';
+		emailSpan.style.paddingRight='14px'; 
+		directContacts.appendChild(emailSpan);
+	}
+
+
+    contactPieces.forEach(function(cp){
+      var div = document.createElement('div'); div.className='inline-contact'; div.style.marginTop='6px'; div.style.fontSize='14px'; div.style.color='var(--muted)';
+      if(cp.indexOf('@') !== -1){
+        var a = document.createElement('a'); a.href = 'mailto:' + cp; a.textContent = cp; a.style.color='inherit'; div.appendChild(a);
+      } else if(/^https?:\/\//.test(cp)){
+        var a2 = document.createElement('a'); a2.href = cp; a2.textContent = cp.replace(/^https?:\/\//,''); a2.target='_blank'; a2.style.color='inherit'; div.appendChild(a2);
+      } else {
+        div.textContent = cp;
+      }
+      titleBlock.appendChild(div);
+    });
+
+    // Skills
+    var skillsContainer = document.getElementById('skillsList'); skillsContainer.innerHTML='';
+    var skills = data.skills || [];
+    skills.forEach(function(s){
+      var name = s.name || s.title || '';
+      if(!name) return;
+      var years = s.yearsOfExperience-1 || s.experience || '';
+      var levelRaw = (s.level || '').toLowerCase();
+      var levelNum = 0;
+      if (levelRaw === 'junior' || levelRaw === 'novice') levelNum = 1;
+	  else if(levelRaw === 'beginner' || levelRaw === 'pre intermediate') levelNum = 2;
+	       
+	 else if(levelRaw === 'competent' || levelRaw === 'intermediate') levelNum = 3;
+	  else if(levelRaw === 'advanced' || levelRaw === 'proficient') levelNum = 4;
+	 
+      else if(levelRaw === 'expert' || levelRaw === 'senior' || levelRaw === 'leader') levelNum = 5;
+      else {
+        var ynum = parseFloat(String(years).replace(/[^0-9.]/g,'')) || 0;
+        if(ynum >= 12) levelNum = 5;
+        else if(ynum >= 6) levelNum = 4;
+        else if(ynum >= 3) levelNum = 3;
+        else if(ynum >= 1) levelNum = 2;
+        else levelNum = 1;
+      }
+
+      var tag = document.createElement('div'); tag.className = 'skill-tag';
+
+      var left = document.createElement('div'); left.style.display='inline-block'; left.style.flexDirection='column'; left.style.marginRight='8px';
+      var nameEl = document.createElement('span'); nameEl.className='skill-name'; nameEl.textContent = name;
+      var metaEl = document.createElement('span'); metaEl.className='skill-meta';
+      var metaText = '';
+      if(years) metaText += (years + ' years');
+      if(s.level){ if(metaText) metaText += ' · '; metaText += s.level.charAt(0).toUpperCase() + s.level.slice(1); }
+      metaEl.textContent = metaText;
+      left.appendChild(nameEl); left.appendChild(metaEl);
+
+      var rightDiv = document.createElement('div'); rightDiv.style.display='block'; rightDiv.style.flexDirection='column'; rightDiv.style.alignItems='flex-start';
+      var levelBar = document.createElement('div'); levelBar.className = 'level-bar';
+      var inner = document.createElement('div'); inner.className = 'level-bar-inner';
+      inner.style.width = Math.round((levelNum/5)*100) + '%';
+      levelBar.appendChild(inner);
+
+      var dashes = document.createElement('div'); dashes.className='level-dashes';
+      for(var i=1;i<=5;i++){ var dash = document.createElement('div'); dash.className='dash'; if(i<=levelNum) dash.className += ' filled'; dashes.appendChild(dash); }
+
+      rightDiv.appendChild(levelBar); rightDiv.appendChild(dashes);
+
+      tag.appendChild(left); tag.appendChild(rightDiv);
+      skillsContainer.appendChild(tag);
+    });
+
+    // Work & Education via Handlebars
+    var workTpl = Handlebars.compile(document.getElementById('work-template').innerHTML);
+    document.getElementById('workList').innerHTML = workTpl({ work: data.work || [] });
+
+    var eduTpl = Handlebars.compile(document.getElementById('edu-template').innerHTML);
+    document.getElementById('eduList').innerHTML = eduTpl({ education: data.education || [] });
+  }
+
+  // expose for debugging
+  window.renderFromJSON = renderFromJSON;
+  setTimeout(()=>{  renderFromJSON(data);},200);
+})();</script></body>
+</html>
